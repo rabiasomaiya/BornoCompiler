@@ -1,69 +1,69 @@
 #include <iostream>
-#include <iomanip>
-#include <string>
+#include <fstream>
+#include <sstream>
 #include "lexer.h"
 #include "parser.h"
 #include "symbol_table.h"
+#include <cstdlib>
 
+using namespace std;
 
-
-std::string tokenTypeToString(TokenType type) {
-    switch (type) {
-        case TokenType::KEYWORD:
-            return "KEYWORD";
-        case TokenType::IDENTIFIER:
-            return "IDENTIFIER";
-        case TokenType::NUMBER:
-            return "NUMBER";
-        case TokenType::STRING:
-            return "STRING";
-        case TokenType::OPERATOR:
-            return "OPERATOR";
-        case TokenType::SYMBOL:
-            return "SYMBOL";
-        default:
-            return "UNKNOWN";
+string tokenName(TokenType type)
+{
+    switch (type)
+    {
+        case TokenType::KEYWORD:    return "KEYWORD";
+        case TokenType::IDENTIFIER: return "IDENTIFIER";
+        case TokenType::NUMBER:     return "NUMBER";
+        case TokenType::STRING:     return "STRING";
+        case TokenType::OPERATOR:   return "OPERATOR";
+        case TokenType::SYMBOL:     return "SYMBOL";
+        default:                    return "UNKNOWN";
     }
 }
 
-int main() {
-    std::string code =
-        "সংখ্যা x = 10;\n"
-        "সংখ্যা y = 20;\n"
-        "লেখা name = \"Somaiya\";\n"
-        "x = x + y;\n";
+int main(int argc, char* argv[])
+{
+#ifdef _WIN32
+    system("chcp 65001 > nul");    // terminal e Bangla dekhanor jonno
+#endif
 
+    if (argc < 2)
+    {
+        cout << "Usage: borno.exe <file.bn>\n";
+        return 1;
+    }
+
+    // File theke code pori
+    ifstream file(argv[1]);
+    stringstream buffer;
+    buffer << file.rdbuf();
+    string code = buffer.str();
+
+    // UTF-8 BOM thakle bad dei
+    if (code.size() >= 3 && code.substr(0, 3) == "\xEF\xBB\xBF")
+        code = code.substr(3);
+
+    // ========== 1. LEXER ==========
     Lexer lexer(code);
+    vector<Token> tokens = lexer.tokenize();
 
-    std::vector<Token> tokens = lexer.tokenize();
-    
-    SymbolTable symbolTable;
-
-for (const auto& token : tokens) {
-    if (token.type == TokenType::IDENTIFIER) {
-        symbolTable.add(token.value, "IDENTIFIER", token.line);
+    cout << "========== LEXER OUTPUT ==========\n";
+    for (auto& t : tokens)
+    {
+        if (t.value == "\r") continue;   // Windows er faka token dekhai na
+        cout << "Line: " << t.line << " | " << tokenName(t.type) << " | " << t.value << "\n";
     }
-}
 
-    Parser parser(tokens);
+    // ========== 2. PARSER ==========
+    cout << "\n========== PARSER OUTPUT ==========\n";
+    SymbolTable table;
+    Parser parser(tokens, table);
     parser.parse();
 
-    std::cout << std::left
-              << std::setw(15) << "TOKEN"
-              << std::setw(20) << "VALUE"
-              << "LINE"
-              << std::endl;
+    // ========== 3. SYMBOL TABLE ==========
+    table.print();
 
-    std::cout << "---------------------------------------------\n";
-
-    for (const Token& token : tokens) {
-        std::cout << std::left
-                  << std::setw(15) << tokenTypeToString(token.type)
-                  << std::setw(20) << token.value
-                  << token.line
-                  << std::endl;
-    }
-    
-    symbolTable.print();
+    cout << "\nTotal errors: " << parser.errorCount << "\n";
     return 0;
 }

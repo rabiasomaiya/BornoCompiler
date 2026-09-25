@@ -1,190 +1,291 @@
 #include "lexer.h"
 #include <cctype>
 
-Lexer::Lexer(const std::string& source) {
-    this->source = source;
+
+Lexer::Lexer(std::string input)
+{
+    source = input;
     position = 0;
     line = 1;
 }
 
-std::vector<Token> Lexer::tokenize() {
+
+bool Lexer::isKeyword(std::string word)
+{
+    std::vector<std::string> keywords =
+    {
+        "সংখ্যা",
+        "দশমিক",
+        "লেখা",
+        "যদি",
+        "নাহলে",
+        "যতক্ষণ",
+        "দেখাও",
+        "ফেরত"
+    };
+
+
+    for(auto k : keywords)
+    {
+        if(word == k)
+            return true;
+    }
+
+    return false;
+}
+
+
+bool Lexer::isOperator(char c)
+{
+    return c=='+' ||
+           c=='-' ||
+           c=='*' ||
+           c=='/' ||
+           c=='=' ||
+           c=='>' ||
+           c=='<' ||
+           c=='!';
+}
+
+
+bool Lexer::isSymbol(char c)
+{
+    return c==';' ||
+           c=='(' ||
+           c==')' ||
+           c=='{' ||
+           c=='}';
+}
+
+
+
+std::vector<Token> Lexer::tokenize()
+{
     std::vector<Token> tokens;
 
-    while (position < source.size()) {
+
+    while(position < source.length())
+    {
 
         char current = source[position];
 
-        // New line
-        if (current == '\n') {
+
+        if(current==' ' || current=='\t')
+        {
+            position++;
+            continue;
+        }
+
+
+        if(current=='\n')
+        {
             line++;
             position++;
             continue;
         }
 
-        // Space / tab
-        if (std::isspace(static_cast<unsigned char>(current))) {
-            position++;
-            continue;
-        }
 
-        // Bangla Keywords
-        std::vector<std::string> keywords = {
-            "সংখ্যা",
-            "লেখা",
-            "যদি",
-            "নাহলে",
-            "যতক্ষণ",
-            "দেখাও"
-        };
 
-        bool keywordFound = false;
+        // Identifier / Bangla keyword
 
-        for (const std::string& keyword : keywords) {
-            if (source.compare(position, keyword.size(), keyword) == 0) {
-                tokens.push_back({
-                    TokenType::KEYWORD,
-                    keyword,
-                    line
-                });
+        if(isalpha((unsigned char)current) ||
+           (unsigned char)current >= 128)
+        {
 
-                position += keyword.size();
-                keywordFound = true;
-                break;
-            }
-        }
+            std::string word;
 
-        if (keywordFound)
-            continue;
 
-        // Number
-        if (std::isdigit(static_cast<unsigned char>(current))) {
-            std::string number;
-
-            while (
-                position < source.size() &&
-                std::isdigit(static_cast<unsigned char>(source[position]))
-            ) {
-                number += source[position];
+            while(position < source.length() &&
+                 (
+                  isalnum((unsigned char)source[position]) ||
+                  (unsigned char)source[position] >= 128
+                 ))
+            {
+                word += source[position];
                 position++;
             }
 
-            tokens.push_back({
+
+            if(isKeyword(word))
+            {
+                tokens.push_back(
+                {
+                    TokenType::KEYWORD,
+                    word,
+                    line
+                });
+            }
+            else
+            {
+                tokens.push_back(
+                {
+                    TokenType::IDENTIFIER,
+                    word,
+                    line
+                });
+            }
+
+
+            continue;
+        }
+
+
+
+
+        // NUMBER + DECIMAL FIX
+
+        if(isdigit(current))
+        {
+
+            std::string number;
+            bool dot = false;
+
+
+            while(position < source.length())
+            {
+
+                char c = source[position];
+
+
+                if(isdigit(c))
+                {
+                    number += c;
+                    position++;
+                }
+
+                else if(c=='.' && !dot)
+                {
+                    dot = true;
+                    number += c;
+                    position++;
+                }
+
+                else
+                {
+                    break;
+                }
+
+            }
+
+
+            tokens.push_back(
+            {
                 TokenType::NUMBER,
                 number,
                 line
             });
 
-            continue;
-        }
-
-        // English Identifier
-        if (
-            std::isalpha(static_cast<unsigned char>(current)) ||
-            current == '_'
-        ) {
-            std::string identifier;
-
-            while (
-                position < source.size() &&
-                (
-                    std::isalnum(static_cast<unsigned char>(source[position])) ||
-                    source[position] == '_'
-                )
-            ) {
-                identifier += source[position];
-                position++;
-            }
-
-            tokens.push_back({
-                TokenType::IDENTIFIER,
-                identifier,
-                line
-            });
 
             continue;
         }
 
-        // String
-        if (current == '"') {
+
+
+
+        // STRING
+
+        if(current=='"')
+        {
+
             position++;
 
-            std::string value;
+            std::string str;
 
-            while (
-                position < source.size() &&
-                source[position] != '"'
-            ) {
-                value += source[position];
 
-                if (source[position] == '\n')
-                    line++;
-
+            while(position < source.length()
+                  &&
+                  source[position]!='"')
+            {
+                str += source[position];
                 position++;
             }
 
-            if (
-                position < source.size() &&
-                source[position] == '"'
-            ) {
-                position++;
-            }
 
-            tokens.push_back({
+            if(position < source.length())
+                position++;
+
+
+            tokens.push_back(
+            {
                 TokenType::STRING,
-                value,
+                str,
                 line
             });
+
 
             continue;
         }
 
-        // Operators
-        if (
-            current == '+' ||
-            current == '-' ||
-            current == '*' ||
-            current == '/' ||
-            current == '=' ||
-            current == '<' ||
-            current == '>'
-        ) {
-            tokens.push_back({
+
+
+
+        // OPERATOR + == FIX
+
+        if(isOperator(current))
+        {
+
+            std::string op;
+            op += current;
+            position++;
+
+
+            if(current=='=' &&
+               position < source.length() &&
+               source[position]=='=')
+            {
+                op += '=';
+                position++;
+            }
+
+
+            tokens.push_back(
+            {
                 TokenType::OPERATOR,
-                std::string(1, current),
+                op,
                 line
             });
 
-            position++;
+
             continue;
         }
 
-        // Symbols
-        if (
-            current == ';' ||
-            current == '(' ||
-            current == ')' ||
-            current == '{' ||
-            current == '}'
-        ) {
-            tokens.push_back({
+
+
+
+        // SYMBOL
+
+        if(isSymbol(current))
+        {
+
+            tokens.push_back(
+            {
                 TokenType::SYMBOL,
-                std::string(1, current),
+                std::string(1,current),
                 line
             });
+
 
             position++;
             continue;
         }
 
-        // Unknown
-        tokens.push_back({
+
+
+
+        // UNKNOWN
+
+        tokens.push_back(
+        {
             TokenType::UNKNOWN,
-            std::string(1, current),
+            std::string(1,current),
             line
         });
 
+
         position++;
+
     }
+
 
     return tokens;
 }
